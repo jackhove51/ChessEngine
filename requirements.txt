@@ -1,2 +1,1 @@
-streamlit>=1.30
-python-chess>=1.999
+Flask>=2.0.0

@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --text-color: #fff;
+            --card-bg: #16213e;
+            --border-color: #0f3460;
+            --btn-primary: #4CAF50;
+            --btn-secondary: #2196F3;
+            --btn-danger: #f44336;
+            --input-bg: #0f3460;
+            --input-border: #1a1a2e;
+        }
+
+        .light-mode {
+            --bg-color: #f0f0f0;
+            --text-color: #333;
+            --card-bg: #fff;
+            --border-color: #ddd;
+            --btn-primary: #4CAF50;
+            --btn-secondary: #2196F3;
+            --btn-danger: #f44336;
+            --input-bg: #fff;
+            --input-border: #ddd;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .header-pawn {
+            width: 30px;
+            height: 30px;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .user-name {
+            color: var(--text-color);
+            font-weight: bold;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background-color: var(--btn-primary);
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: var(--btn-secondary);
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: var(--btn-danger);
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+        }
+
+        .theme-btn {
+            background: transparent;
+            border: 2px solid var(--text-color);
+            color: var(--text-color);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .theme-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .game-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .board-wrapper {
+            position: relative;
+        }
+
+        .board {
+            width: 560px;
+            height: 560px;
+            background-image: url('/static/asset/board.png');
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .board-inner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(8, 70px);
+            grid-template-rows: repeat(8, 70px);
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(8, 70px);
+            grid-template-rows: repeat(8, 70px);
+            pointer-events: none;
+        }
+
+        .grid-cell {
+            width: 70px;
+            height: 70px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light-mode .grid-cell {
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .files {
+            display: flex;
+            justify-content: space-around;
+            width: 560px;
+            margin-top: 5px;
+            padding: 0 5px;
+        }
+
+        .files span {
+            width: 70px;
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        .ranks {
+            position: absolute;
+            left: -20px;
+            top: 0;
+            height: 560px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+        }
+
+        .ranks span {
+            height: 70px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        .square {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .square.selected {
+            box-shadow: inset 0 0 0 3px #2196F3;
+        }
+
+        .square.valid-move::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: rgba(0, 255, 0, 0.5);
+            border-radius: 50%;
+        }
+
+        .square.valid-capture {
+            box-shadow: inset 0 0 0 3px #f44336;
+        }
+
+        .piece {
+            width: 55px;
+            height: 55px;
+            user-select: none;
+            cursor: grab;
+        }
+
+        .piece:active {
+            cursor: grabbing;
+        }
+
+        .info-panel {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 220px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background-color 0.3s;
+        }
+
+        .turn-indicator {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .turn-indicator.white {
+            background: #f5f5dc;
+            color: #333;
+        }
+
+        .turn-indicator.black {
+            background: #333;
+            color: #f5f5dc;
+        }
+
+        .game-status {
+            font-size: 14px;
+            margin-bottom: 15px;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .game-status.checkmate {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .game-status.check {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .difficulty {
+            margin-bottom: 15px;
+        }
+
+        .difficulty h4 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .diff-btns {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .diff-btn {
+            padding: 6px 10px;
+            font-size: 11px;
+            background: #444;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .light-mode .diff-btn {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .diff-btn.active {
+            background: var(--btn-secondary);
+        }
+
+        .ai-status {
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .thinking {
+            display: none;
+            text-align: center;
+            padding: 8px;
+            color: var(--btn-secondary);
+            font-size: 12px;
+        }
+
+        .thinking.active {
+            display: block;
+        }
+
+        .captured {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+
+        .light-mode .captured {
+            background: #f5f5f5;
+        }
+
+        .captured h4 {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .captured span {
+            font-size: 20px;
+        }
+
+        @media (max-width: 800px) {
+            .board {
+                width: 360px;
+                height: 360px;
+            }
+
+            .board-inner,
+            .grid-overlay {
+                grid-template-columns: repeat(8, 45px);
+                grid-template-rows: repeat(8, 45px);
+            }
+
+            .square,
+            .grid-cell {
+                width: 45px;
+                height: 45px;
+            }
+
+            .piece {
+                width: 35px;
+                height: 35px;
+            }
+
+            .files {
+                width: 360px;
+            }
+
+            .files span {
+                width: 45px;
+            }
+
+            .ranks {
+                height: 360px;
+            }
+
+            .ranks span {
+                height: 45px;
+            }
+        }
+
+        .auth-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+        }
+
+        .auth-screen.hidden {
+            display: none;
+        }
+
+        .auth-box {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            width: 90%;
+            max-width: 350px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: background-color 0.3s;
+        }
+
+        .auth-box h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--text-color);
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            background: #333;
+            color: white;
+        }
+
+        .light-mode .auth-tab {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .auth-tab.active {
+            background: var(--btn-secondary);
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #888;
+            font-size: 13px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            font-size: 14px;
+            background: var(--input-bg);
+            color: var(--text-color);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--btn-secondary);
+        }
+
+        .btn-block {
+            width: 100%;
+            padding: 12px;
+        }
+
+        .divider {
+            text-align: center;
+            margin: 15px 0;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .game-screen {
+            display: none;
+        }
+
+        .game-screen.active {
+            display: block;
+        }
+
+        .learning-mode {
+            margin-bottom: 15px;
+        }
+
+        .learning-mode h4 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .mode-btns {
+            display: flex;
+            gap: 5px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+            background: #333;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .light-mode .mode-btn {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .mode-btn.active {
+            background: var(--btn-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-screen" id="auth-screen">
+        <div class="auth-box">
+            <h2><img src="/static/asset/pieces/wp.png" style="width:30px;vertical-align:middle;"> Chess</h2>
+            <div class="auth-tabs">
+                <div class="auth-tab active" data-tab="login">Login</div>
+                <div class="auth-tab" data-tab="signup">Sign Up</div>
+            </div>
+
+            <form class="auth-form active" id="login-form">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+            </form>
+
+            <form class="auth-form" id="signup-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="signup-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="signup-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="signup-password" required>
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="signup-confirm" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Sign Up</button>
+            </form>
+
+            <div class="divider">or</div>
+
+            <button class="btn btn-secondary btn-block" id="btn-guest">Play as Guest</button>
+        </div>
+    </div>
+
+    <div class="game-screen" id="game-screen">
+        <div class="header">
+            <div class="header-left">
+                <img src="/static/asset/pieces/wp.png" class="header-pawn">
+                <h1>Chess</h1>
+            </div>
+            <div class="header-right">
+                <span class="user-name" id="username-display"></span>
+                <button class="theme-btn" id="btn-theme" title="Toggle Theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="btn btn-danger" id="btn-logout">Logout</button>
+            </div>
+        </div>
+
+        <div class="game-container">
+            <div class="board-section">
+                <div class="board-wrapper">
+                    <div class="ranks">
+                        <span>8</span><span>7</span><span>6</span><span>5</span>
+                        <span>4</span><span>3</span><span>2</span><span>1</span>
+                    </div>
+                    
+                    <div class="board" id="board">
+                        <div class="grid-overlay" id="grid-overlay"></div>
+                        <div class="board-inner" id="board-inner"></div>
+                    </div>
+                    
+                    <div class="files">
+                        <span>a</span><span>b</span><span>c</span><span>d</span>
+                        <span>e</span><span>f</span><span>g</span><span>h</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="turn-indicator white" id="turn-indicator">White's Turn</div>
+                
+                <div class="game-status" id="game-status"></div>
+                
+                <div class="thinking" id="thinking">AI is thinking...</div>
+
+                <div class="learning-mode">
+                    <h4>Game Mode</h4>
+                    <div class="mode-btns">
+                        <button class="mode-btn active" data-mode="normal">Normal</button>
+                        <button class="mode-btn" data-mode="learning">Learn</button>
+                    </div>
+                </div>
+
+                <div class="ai-status" id="ai-status">AI: Medium</div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" id="btn-new-game">New Game</button>
+                    
+                    <div class="difficulty">
+                        <h4>Difficulty</h4>
+                        <div class="diff-btns">
+                            <button class="diff-btn" data-level="1">1</button>
+                            <button class="diff-btn" data-level="2">2</button>
+                            <button class="diff-btn active" data-level="3">3</button>
+                            <button class="diff-btn" data-level="4">4</button>
+                            <button class="diff-btn" data-level="5">5</button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary" id="btn-undo">Undo</button>
+                    
+                    <button class="btn btn-danger" id="btn-resign">Resign</button>
+                </div>
+
+                <div class="captured">
+                    <h4>White captured:</h4>
+                    <span id="white-captured"></span>
+                </div>
+                
+                <div class="captured">
+                    <h4>Black captured:</h4>
+                    <span id="black-captured"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PIECE_IMAGES = {
+            'wp': '/static/asset/pieces/wp.png',
+            'wr': '/static/asset/pieces/wR.png',
+            'wn': '/static/asset/pieces/wN.png',
+            'wb': '/static/asset/pieces/wB.png',
+            'wq': '/static/asset/pieces/wQ.png',
+            'wk': '/static/asset/pieces/wK.png',
+            'bp': '/static/asset/pieces/bp.png',
+            'br': '/static/asset/pieces/bR.png',
+            'bn': '/static/asset/pieces/bN.png',
+            'bb': '/static/asset/pieces/bB.png',
+            'bq': '/static/asset/pieces/bQ.png',
+            'bk': '/static/asset/pieces/bK.png'
+        };
+
+        let gameState = {
+            board: [],
+            currentTurn: 'white',
+            gameOver: false,
+            winner: null,
+            selectedSquare: null,
+            validMoves: [],
+            difficulty: 3,
+            gameMode: 'normal'
+        };
+
+        let currentUser = null;
+        let isLoggedIn = false;
+        let draggedPiece = null;
+        let dragStartSquare = null;
+        let isDarkMode = true;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initGrid();
+            setupEventListeners();
+            setupAuthListeners();
+            checkSession();
+        });
+
+        function initGrid() {
+            const gridOverlay = document.getElementById('grid-overlay');
+            gridOverlay.innerHTML = '';
+            for (let i = 0; i < 64; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                gridOverlay.appendChild(cell);
+            }
+        }
+
+        function setupEventListeners() {
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    gameState.gameMode = e.target.dataset.mode;
+                });
+            });
+
+            document.getElementById('btn-new-game').addEventListener('click', newGame);
+            document.getElementById('btn-undo').addEventListener('click', undoMove);
+            document.getElementById('btn-resign').addEventListener('click', resign);
+
+            document.querySelectorAll('.diff-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    gameState.difficulty = parseInt(e.target.dataset.level);
+                    await newGame();
+                });
+            });
+
+            document.getElementById('btn-theme').addEventListener('click', toggleTheme);
+        }
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode');
+            const icon = document.querySelector('#btn-theme i');
+            if (isDarkMode) {
+                icon.className = 'fas fa-moon';
+            } else {
+                icon.className = 'fas fa-sun';
+            }
+        }
+
+        function setupAuthListeners() {
+            document.querySelectorAll('.auth-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById(tab.dataset.tab + '-form').classList.add('active');
+                });
+            });
+
+            document.getElementById('btn-guest').addEventListener('click', loginAsGuest);
+            document.getElementById('btn-logout').addEventListener('click', logout);
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('signup-form').addEventListener('submit', handleSignup);
+        }
+
+        async function checkSession() {
+            try {
+                const response = await fetch('/api/auth/check');
+                const data = await response.json();
+                if (data.logged_in) {
+                    setUser(data.user);
+                }
+            } catch (e) {
+                console.log('No active session');
+            }
+        }
+
+        function showAuth() {
+            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.remove('active');
+        }
+
+        function showGame() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.add('active');
+        }
+
+        function setUser(user) {
+            currentUser = user;
+            isLoggedIn = true;
+            document.getElementById('username-display').textContent = user.username || user.email;
+            showGame();
+            initGame();
+        }
+
+        async function loginAsGuest() {
+            try {
+                const response = await fetch('/api/auth/guest', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    setUser(data.user);
+                }
+            } catch (e) {
+                currentUser = { username: 'Guest', is_guest: true };
+                isLoggedIn = true;
+                setUser({ username: 'Guest' });
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    setUser(data.user);
+                    document.getElementById('login-form').reset();
+                } else {
+                    alert(data.message || 'Login failed');
+                }
+            } catch (e) {
+                alert('An error occurred');
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const username = document.getElementById('signup-username').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const confirm = document.getElementById('signup-confirm').value;
+
+            if (password !== confirm) {
+                alert('Passwords do not match');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    setUser(data.user);
+                    document.getElementById('signup-form').reset();
+                } else {
+                    alert(data.message || 'Signup failed');
+                }
+            } catch (e) {
+                alert('An error occurred');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (e) {}
+            currentUser = null;
+            isLoggedIn = false;
+            showAuth();
+        }
+
+        async function initGame() {
+            await newGame();
+        }
+
+        async function newGame() {
+            if (!isLoggedIn) return;
+            
+            const response = await fetch('/api/new-game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    difficulty: gameState.difficulty,
+                    gameMode: gameState.gameMode,
+                    user_id: currentUser?.email || currentUser?.username
+                })
+            });
+            
+            const data = await response.json();
+            updateGameState(data);
+            await updateBoard();
+            updateCapturedPieces();
+            
+            document.getElementById('ai-status').textContent = 'AI: Level ' + gameState.difficulty;
+        }
+
+        function updateGameState(data) {
+            gameState.board = data.board;
+            gameState.currentTurn = data.currentTurn;
+            gameState.gameOver = data.gameOver;
+            gameState.winner = data.winner;
+            gameState.inCheck = data.inCheck || { white: false, black: false };
+        }
+
+        async function updateBoard() {
+            const boardEl = document.getElementById('board-inner');
+            boardEl.innerHTML = '';
+
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = 'square';
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+
+                    const piece = gameState.board[row][col];
+                    if (piece) {
+                        const pieceEl = document.createElement('img');
+                        pieceEl.className = 'piece';
+                        pieceEl.src = PIECE_IMAGES[piece];
+                        pieceEl.alt = piece;
+                        
+                        if (piece[0] === 'w' && gameState.currentTurn === 'white') {
+                            pieceEl.draggable = true;
+                            pieceEl.addEventListener('dragstart', handleDragStart);
+                            pieceEl.addEventListener('dragend', handleDragEnd);
+                        }
+                        
+                        square.appendChild(pieceEl);
+                    }
+
+                    square.addEventListener('click', (e) => {
+                        if (e.target === square || e.target.classList.contains('piece')) {
+                            handleSquareClick(row, col);
+                        }
+                    });
+
+                    square.addEventListener('dragover', handleDragOver);
+                    square.addEventListener('drop', handleDrop);
+
+                    if (gameState.selectedSquare && 
+                        gameState.selectedSquare.row === row && 
+                        gameState.selectedSquare.col === col) {
+                        square.classList.add('selected');
+                    }
+
+                    if (gameState.validMoves.some(m => m.row === row && m.col === col)) {
+                        if (piece) {
+                            square.classList.add('valid-capture');
+                        } else {
+                            square.classList.add('valid-move');
+                        }
+                    }
+
+                    boardEl.appendChild(square);
+                }
+            }
+
+            updateTurnIndicator();
+            updateGameStatus();
+        }
+
+        function handleDragStart(e) {
+            if (!isLoggedIn || gameState.currentTurn !== 'white' || gameState.gameOver) {
+                e.preventDefault();
+                return;
+            }
+            
+            const square = e.target.parentElement;
+            const row = parseInt(square.dataset.row);
+            const col = parseInt(square.dataset.col);
+            
+            dragStartSquare = { row, col };
+            draggedPiece = e.target;
+            
+            fetch(`/api/valid-moves?row=${row}&col=${col}`)
+                .then(res => res.json())
+                .then(data => {
+                    gameState.validMoves = data.moves || [];
+                    updateBoard();
+                });
+        }
+
+        function handleDragEnd(e) {
+            draggedPiece = null;
+            dragStartSquare = null;
+            gameState.validMoves = [];
+            updateBoard();
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        async function handleDrop(e) {
+            e.preventDefault();
+            
+            if (!dragStartSquare || !draggedPiece) return;
+            
+            let targetSquare = e.target;
+            while (targetSquare && !targetSquare.classList.contains('square')) {
+                targetSquare = targetSquare.parentElement;
+            }
+            
+            if (!targetSquare) return;
+            
+            const toRow = parseInt(targetSquare.dataset.row);
+            const toCol = parseInt(targetSquare.dataset.col);
+            
+            const isValidMove = gameState.validMoves.some(m => m.row === toRow && m.col === toCol);
+            
+            if (isValidMove) {
+                await makeMove(dragStartSquare.row, dragStartSquare.col, toRow, toCol);
+            }
+            
+            draggedPiece = null;
+            dragStartSquare = null;
+        }
+
+        function updateTurnIndicator() {
+            const indicator = document.getElementById('turn-indicator');
+            indicator.className = 'turn-indicator ' + gameState.currentTurn;
+            indicator.textContent = gameState.currentTurn === 'white' ? "White's Turn" : "Black's Turn";
+        }
+
+        function updateGameStatus() {
+            const statusEl = document.getElementById('game-status');
+            statusEl.className = 'game-status';
+            
+            if (gameState.gameOver) {
+                statusEl.classList.add('checkmate');
+                if (gameState.winner === 'white') {
+                    statusEl.textContent = 'White wins!';
+                } else if (gameState.winner === 'black') {
+                    statusEl.textContent = 'Black wins!';
+                } else {
+                    statusEl.textContent = 'Draw!';
+                }
+            } else if (gameState.inCheck[gameState.currentTurn]) {
+                statusEl.classList.add('check');
+                statusEl.textContent = 'Check!';
+            } else {
+                statusEl.textContent = '';
+            }
+        }
+
+        async function handleSquareClick(row, col) {
+            if (!isLoggedIn) return;
+            
+            const piece = gameState.board[row][col];
+            const isWhitePiece = piece && piece[0] === 'w';
+            const isCurrentTurn = gameState.currentTurn === 'white';
+
+            if (gameState.selectedSquare) {
+                const isValidMove = gameState.validMoves.some(m => m.row === row && m.col === col);
+                
+                if (isValidMove) {
+                    await makeMove(gameState.selectedSquare.row, gameState.selectedSquare.col, row, col);
+                    return;
+                }
+            }
+
+            if (isCurrentTurn && isWhitePiece) {
+                gameState.selectedSquare = { row, col };
+                
+                const response = await fetch(`/api/valid-moves?row=${row}&col=${col}`);
+                const data = await response.json();
+                gameState.validMoves = data.moves || [];
+                
+                await updateBoard();
+            }
+        }
+
+        async function makeMove(fromRow, fromCol, toRow, toCol) {
+            const response = await fetch('/api/make-move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fromRow, fromCol, toRow, toCol })
+            });
+
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error('Move error:', data.error);
+                return;
+            }
+
+            gameState.selectedSquare = null;
+            gameState.validMoves = [];
+            
+            updateGameState(data);
+            await updateBoard();
+            updateCapturedPieces();
+
+            if (gameState.currentTurn === 'black' && !gameState.gameOver) {
+                document.getElementById('thinking').classList.add('active');
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                const aiResponse = await fetch('/api/ai-move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        gameMode: gameState.gameMode,
+                        user_id: currentUser?.email || currentUser?.username
+                    })
+                });
+                
+                const aiData = await aiResponse.json();
+                document.getElementById('thinking').classList.remove('active');
+                
+                if (!aiData.error) {
+                    updateGameState(aiData);
+                    await updateBoard();
+                    updateCapturedPieces();
+                }
+            }
+        }
+
+        async function undoMove() {
+            if (!isLoggedIn) return;
+            
+            const response = await fetch('/api/undo', { method: 'POST' });
+            const data = await response.json();
+            
+            gameState.selectedSquare = null;
+            gameState.validMoves = [];
+            
+            updateGameState(data);
+            await updateBoard();
+            updateCapturedPieces();
+        }
+
+        async function resign() {
+            if (!isLoggedIn || gameState.gameOver) return;
+            
+            gameState.gameOver = true;
+            gameState.winner = gameState.currentTurn === 'white' ? 'black' : 'white';
+            await updateBoard();
+        }
+
+        async function updateCapturedPieces() {
+            const response = await fetch('/api/captured-pieces');
+            const captured = await response.json();
+            
+            const whiteCapturedEl = document.getElementById('white-captured');
+            const blackCapturedEl = document.getElementById('black-captured');
+            
+            whiteCapturedEl.innerHTML = captured.white.map(p => 
+                `<img src="${PIECE_IMAGES[p]}" style="width:25px;height:25px;">`
+            ).join('');
+            
+            blackCapturedEl.innerHTML = captured.black.map(p => 
+                `<img src="${PIECE_IMAGES[p]}" style="width:25px;height:25px;">`
+            ).join('');
+        }
+    </script>
+</body>
+</html>
