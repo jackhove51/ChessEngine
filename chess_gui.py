@@ -6,7 +6,7 @@ from chess_ai import ChessAI, DIFFICULTY_NAMES
 
 
 class ChessGUI:
-   
+    """Main chess game GUI using Tkinter"""
     
     def __init__(self, root: tk.Tk):
         self.root = root

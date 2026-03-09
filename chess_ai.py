@@ -4,7 +4,7 @@ from chess_engine import ChessGame
 
 
 class ChessAI:
-
+    """Chess AI using minimax with alpha-beta pruning"""
     
     def __init__(self, difficulty: int = 3):
         self.difficulty = difficulty  

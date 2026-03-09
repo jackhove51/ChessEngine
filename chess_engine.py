@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 
 class ChessGame:
-   
+    """Main chess game engine handling all game logic"""
     
     def __init__(self):
         self.board: List[List[Optional[str]]] = []
