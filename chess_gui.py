@@ -206,7 +206,7 @@ class ChessGUI:
             self.game_mode = 'ai'
             difficulty = simpledialog.askinteger(
                 "AI Difficulty",
-                f"Select difficulty (1-5):\n1 = Beginner\n2 = Easy\n3 = Medium (default)\n4 = Hard\n5 = Expert",
+                "Select difficulty (1-5):\n1 = Beginner\n2 = Easy\n3 = Medium (default)\n4 = Hard\n5 = Expert",
                 parent=self.root,
                 minvalue=1,
                 maxvalue=5,
@@ -409,6 +409,7 @@ class ChessGUI:
         
        
         if self.game_mode == 'ai':
+            # TODO: Is this variable needed?
             diff_name = DIFFICULTY_NAMES.get(self.ai_difficulty, 'Medium')
            
     
@@ -433,7 +434,7 @@ class ChessGUI:
 def main():
     """Main entry point"""
     root = tk.Tk()
-    app = ChessGUI(root)
+    ChessGUI(root)
     root.mainloop()
 
 

@@ -1,9 +1,13 @@
 import os
 import json
 import uuid
+import logging
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from chess_engine import ChessGame
 from chess_ai import ChessAI
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'chess-secret-key-' + str(uuid.uuid4()))
@@ -207,8 +211,11 @@ def save_learning():
         try:
             with open('learning_data.json', 'w') as f:
                 json.dump(learning_data, f)
-        except:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Learning data not written due to exception %s",
+                e
+            )
     
     return jsonify({'success': True})
 
@@ -333,7 +340,7 @@ def load_learning_data():
             learning_data = json.load(f)
     except FileNotFoundError:
         learning_data = {}
-    except Exception as e:
+    except Exception:
         learning_data = {}
 
 if __name__ == '__main__':
