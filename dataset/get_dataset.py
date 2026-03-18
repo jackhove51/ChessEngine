@@ -1,8 +1,17 @@
+from __future__ import annotations
+
 import os
 import json
-from copy import deepcopy
+import math
+import chess
+import logging
 import zstandard as zstd
+from typing import Any
 from pathlib import Path
+
+logger = logging.getLogger(__file__)
+logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 # Replace filename with the path to the downloaded .zst file, which can be
 # downloaded at https://database.lichess.org/#evals
@@ -18,9 +27,12 @@ class Dataset:
         input_filepath: Path = INPUT_FILEPATH,
         output_filepath: Path = OUTPUT_FILEPATH,
         max_positions: int = POSITIONS,
-        overwrite: bool = True,
+        overwrite: bool = False,
     ):
         """
+        Decompresses position evaluations stored in a .zst file and
+        preprocesses the data such that each entry is reduced to FEN and
+        centipawn evaluation (cp).
 
         :param input_filepath: Filepath to .zst archive of chess evaluations.
         :param output_filepath: Filepath to existing/desired location of
@@ -42,8 +54,16 @@ class Dataset:
         with open(self.output_filepath, 'r') as f:
             self.raw_data = json.load(f)
 
-        self.data = deepcopy(self.raw_data)
-        # TODO: Implement some kind of hash to ensure position uniqueness
+        # Remove repeated positions
+        self.data = list({d["fen"]: d for d in self.raw_data}.values())
+
+        self._parse_fen()
+
+        for position in self.data:
+            self._select_eval(position)
+            self._handle_pvs(position)
+
+        self.preprocessed_data = self._flatten()
 
     def __len__(self) -> int:
         return len(self.data)
@@ -85,26 +105,68 @@ class Dataset:
 
                     writer.write(b"\n]")
 
-    def _parse_fen(self):
-        # TODO: Parse fen to align with pre-existing board position
-        #  representation and/or desired structure for input tensor
-        pass
+    def _parse_fen(self) -> None:
+        # TODO: Do we want to add functionality to convert FEN to match board
+        #  structure in chess_engine.py?
+        """
+        Removes invalid positions
+        :return:
+        """
+        for i, position in enumerate(self.raw_data):
+            fen = position["fen"]
+            try:
+                board = chess.Board(fen)
+                board.is_valid()
+            except ValueError as e:
+                del self.data[i]
+                logger.info(
+                    "Deleted position at index %s due to ValueError: %s",
+                    i, e
+                )
 
-    # TODO: Remove any of the following - illegal positions, missing info,
-    #  illegal castling rights, out-of-range evals
+    @staticmethod
+    def _select_eval(position: dict[str, Any]) -> None:
+        """
+        In positions with multiple evals, this calculates the best evaluation
+        and removes the others
+        :param position:
+        :return:
+        """
+        evals = position["evals"]
 
-    def _select_eval(self):
-        # TODO: Select best eval from the list of evals in a position using
-        #  weighted quality (score = depth * log(knodes)). Also,
-        #  potentially filter low quality positions
-        pass
+        best_index = 0
+        max_score = 0
+        for i, ev in enumerate(evals):
+            knodes = ev['knodes']
+            depth = ev['depth']
+            if knodes > 0:
+                score = depth * math.log(knodes)
+                if score > max_score:
+                    best_index = i
+                    max_score = score
 
-    def handle_mate_in_n(self):
-        pass
-        # TODO: Convert to cp eval, assign sign and n
-        # mate_in_n = sign + (10000 - 100 * n)
-        # cp = min(-1000, min(1000, mate_in_n))
+        position["evals"] = [position["evals"][best_index]]
 
-    def normalize(self):
-        # TODO: Normalize to [-1, 1] using tanh(cp / 400)
-        pass
+    @staticmethod
+    def _handle_pvs(position: dict[str, Any], max_cp: int = 1000) -> None:
+        """
+        Selects the top principal variation (i.e. best variation) and
+        converts "mate in n" to centipawn evaluation, if needed.
+        :param position: Chess board state.
+        :param max_cp: Upper bound for centipawn evaluation.
+        :return:
+        """
+        best_pv = position["evals"][0]["pvs"][0]
+        mate = best_pv.pop("mate", None)
+        if mate is not None:
+            best_pv["cp"] = (max_cp - abs(mate)) * (1 if mate > 0 else -1)
+        best_pv["cp"] = max(-1.0, min(1.0, best_pv["cp"] / max_cp))
+        position["evals"][0]["pvs"] = [best_pv]
+
+    def _flatten(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "fen": position["fen"],
+                "cp": position["evals"][0]["pvs"][0]["cp"]
+            } for position in self.data
+        ]
