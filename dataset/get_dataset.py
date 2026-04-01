@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import numpy as np
 import math
 import chess
 import logging
@@ -18,6 +19,21 @@ logging.basicConfig(level=logging.INFO)
 INPUT_FILEPATH = Path(__file__).parent / "<filename>.zst"
 OUTPUT_FILEPATH = Path(__file__).parent / "lichess_positions.json"
 POSITIONS = 100000
+
+PIECE_TO_INDEX = {
+    (chess.PAWN,   chess.WHITE): 0,
+    (chess.KNIGHT, chess.WHITE): 1,
+    (chess.BISHOP, chess.WHITE): 2,
+    (chess.ROOK,   chess.WHITE): 3,
+    (chess.QUEEN,  chess.WHITE): 4,
+    (chess.KING,   chess.WHITE): 5,
+    (chess.PAWN,   chess.BLACK): 6,
+    (chess.KNIGHT, chess.BLACK): 7,
+    (chess.BISHOP, chess.BLACK): 8,
+    (chess.ROOK,   chess.BLACK): 9,
+    (chess.QUEEN,  chess.BLACK): 10,
+    (chess.KING,   chess.BLACK): 11,
+}
 
 
 class Dataset:
@@ -47,12 +63,23 @@ class Dataset:
         # Fail-safes could be added to ensure a pre-existing output file is
         # not empty and contains the proper schema.
         if not overwrite and os.path.exists(self.output_filepath):
-            pass
+            logger.info(
+                "Existing samples found at location: %s",
+                self.output_filepath
+            )
         else:
             self._extract_subset()
+            logger.info(
+                "Writing new samples to file: %s",
+                self.output_filepath
+            )
 
         with open(self.output_filepath, 'r') as f:
             self.raw_data = json.load(f)
+            logger.info(
+                "Samples successfully extracted from archive: %s",
+                self.output_filepath
+            )
 
         # Remove repeated positions
         self.data = list({d["fen"]: d for d in self.raw_data}.values())
@@ -64,6 +91,7 @@ class Dataset:
             self._handle_pvs(position)
 
         self.preprocessed_data = self._flatten()
+        self.X, self.y = self._prepare_dataset()
 
     def __len__(self) -> int:
         return len(self.data)
@@ -170,3 +198,26 @@ class Dataset:
                 "cp": position["evals"][0]["pvs"][0]["cp"]
             } for position in self.data
         ]
+
+    @staticmethod
+    def _fen_to_feature_vector(fen: str) -> np.ndarray:
+        board = chess.Board(fen)
+        planes = np.zeros((12, 8, 8), dtype=np.float32)
+
+        for square, piece in board.piece_map().items():
+            rank, file = divmod(square, 8)
+            plane = PIECE_TO_INDEX[(piece.piece_type, piece.color)]
+            planes[plane, rank, file] = 1.0
+
+        return planes.flatten()
+
+    def _prepare_dataset(self) -> tuple[np.ndarray, np.ndarray]:
+        X = np.array(
+            [
+                self._fen_to_feature_vector(d['fen']) for d in
+                self.preprocessed_data
+            ]
+        )
+        y = np.array([d['cp'] for d in self.preprocessed_data])
+        logger.info("Dataset prepared")
+        return X, y
