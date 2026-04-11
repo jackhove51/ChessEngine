@@ -1,6 +1,5 @@
 from typing import Optional, List, Tuple, Dict, Any
 from copy import deepcopy
-from dataclasses import dataclass, field
 
 
 class ChessGame:
