@@ -326,6 +326,41 @@ def logout():
     
     return jsonify({'success': True})
 
+@app.route('/api/evaluate', methods=['GET'])
+def evaluate():
+    session_id = request.headers.get('X-Session-ID', 'default')
+    game, ai = get_game(session_id)
+    score = ai.evaluate_board(game, 'white')
+    return jsonify({'score': score})
+
+@app.route('/api/move-quality', methods=['POST'])
+def move_quality():
+    data = request.json
+    eval_before = data.get('evalBefore', 0)
+    eval_after = data.get('evalAfter', 0)
+    is_white_move = data.get('isWhiteMove', True)
+
+    # centipawn loss from the moving side's perspective
+    if is_white_move:
+        cp_loss = eval_before - eval_after
+    else:
+        cp_loss = eval_after - eval_before
+
+    if cp_loss <= -100:
+        quality, annotation, color = 'Brilliant', '!!', '#1baca6'
+    elif cp_loss < -20:
+        quality, annotation, color = 'Great', '!', '#5c8bb0'
+    elif cp_loss <= 20:
+        quality, annotation, color = 'Good', '', '#888888'
+    elif cp_loss <= 50:
+        quality, annotation, color = 'Inaccuracy', '?!', '#f0c040'
+    elif cp_loss <= 100:
+        quality, annotation, color = 'Mistake', '?', '#e07020'
+    else:
+        quality, annotation, color = 'Blunder', '??', '#cc3333'
+
+    return jsonify({'quality': quality, 'annotation': annotation, 'color': color})
+
 def load_learning_data():
     global learning_data
     try:

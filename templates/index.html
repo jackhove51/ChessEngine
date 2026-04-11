@@ -564,6 +564,124 @@
         .mode-btn.active {
             background: var(--btn-primary);
         }
+
+        /* ── Eval Bar ─────────────────────────────────────────── */
+        .board-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .eval-bar-container {
+            position: absolute;
+            left: -52px;
+            top: 0;
+            width: 20px;
+            height: 560px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .eval-score {
+            font-size: 10px;
+            font-weight: bold;
+            color: var(--text-color);
+            white-space: nowrap;
+            line-height: 1;
+        }
+
+        .eval-bar {
+            flex: 1;
+            width: 20px;
+            background: #1a1a1a;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid #444;
+            position: relative;
+        }
+
+        .eval-fill-white {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #ede0c8;
+            transition: height 0.5s ease;
+            height: 50%;
+        }
+
+        /* ── Move History ─────────────────────────────────────── */
+        .move-history {
+            width: 560px;
+            margin-top: 12px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 10px 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background-color 0.3s;
+        }
+
+        .move-history h4 {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .move-list {
+            max-height: 110px;
+            overflow-y: auto;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+            color: var(--text-color);
+            line-height: 1.8;
+        }
+
+        .move-pair {
+            display: inline-block;
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+
+        .move-num {
+            color: #777;
+        }
+
+        .move-ann {
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        /* ── Material Score ───────────────────────────────────── */
+        .material-score {
+            margin-top: 8px;
+            padding: 5px 8px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .light-mode .material-score {
+            background: #ebebeb;
+        }
+
+        .material-score.white-ahead { color: #4CAF50; }
+        .material-score.black-ahead { color: #e05050; }
+        .material-score.even { color: #888; }
+
+        @media (max-width: 800px) {
+            .eval-bar-container {
+                left: -42px;
+                height: 360px;
+            }
+            .move-history {
+                width: 360px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -631,6 +749,13 @@
         <div class="game-container">
             <div class="board-section">
                 <div class="board-wrapper">
+                    <div class="eval-bar-container">
+                        <div class="eval-score" id="eval-score">0.0</div>
+                        <div class="eval-bar" id="eval-bar">
+                            <div class="eval-fill-white" id="eval-fill-white"></div>
+                        </div>
+                    </div>
+
                     <div class="ranks">
                         <span>8</span><span>7</span><span>6</span><span>5</span>
                         <span>4</span><span>3</span><span>2</span><span>1</span>
@@ -645,6 +770,11 @@
                         <span>a</span><span>b</span><span>c</span><span>d</span>
                         <span>e</span><span>f</span><span>g</span><span>h</span>
                     </div>
+                </div>
+
+                <div class="move-history">
+                    <h4>Move History</h4>
+                    <div class="move-list" id="move-list"></div>
                 </div>
             </div>
 
@@ -688,11 +818,13 @@
                     <h4>White captured:</h4>
                     <span id="white-captured"></span>
                 </div>
-                
+
                 <div class="captured">
                     <h4>Black captured:</h4>
                     <span id="black-captured"></span>
                 </div>
+
+                <div class="material-score even" id="material-score">= Even</div>
             </div>
         </div>
     </div>
@@ -729,6 +861,102 @@
         let draggedPiece = null;
         let dragStartSquare = null;
         let isDarkMode = true;
+
+        // Eval + move history state
+        let lastEval = 0;
+        let moveCount = 0;
+
+        const MATERIAL_VALUES = { 'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9 };
+
+        function squareToAlg(row, col) {
+            return String.fromCharCode(97 + col) + (8 - row);
+        }
+
+        function piecePrefix(piece) {
+            if (!piece) return '';
+            return { 'p': '', 'r': 'R', 'n': 'N', 'b': 'B', 'q': 'Q', 'k': 'K' }[piece[1]] || '';
+        }
+
+        function buildNotation(piece, targetPiece, fromRow, fromCol, toRow, toCol) {
+            const prefix = piecePrefix(piece);
+            const target = squareToAlg(toRow, toCol);
+            const isCapture = targetPiece !== null;
+            if (prefix === '' && isCapture) {
+                return squareToAlg(fromRow, fromCol)[0] + 'x' + target;
+            }
+            return prefix + (isCapture ? 'x' : '') + target;
+        }
+
+        function updateEvalBarDisplay(score) {
+            const pct = 50 + 50 * Math.tanh(score / 400);
+            document.getElementById('eval-fill-white').style.height = pct + '%';
+            const display = score >= 0
+                ? '+' + (score / 100).toFixed(1)
+                : (score / 100).toFixed(1);
+            document.getElementById('eval-score').textContent = display;
+        }
+
+        async function fetchEval() {
+            try {
+                const resp = await fetch('/api/evaluate');
+                const data = await resp.json();
+                return data.score;
+            } catch (e) {
+                return lastEval;
+            }
+        }
+
+        async function getMoveQuality(evalBefore, evalAfter, isWhiteMove) {
+            try {
+                const resp = await fetch('/api/move-quality', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ evalBefore, evalAfter, isWhiteMove })
+                });
+                return await resp.json();
+            } catch (e) {
+                return { quality: 'Good', annotation: '', color: '#888' };
+            }
+        }
+
+        function addMoveToHistory(notation, quality, isWhite) {
+            const moveListEl = document.getElementById('move-list');
+            if (isWhite) {
+                moveCount++;
+                const pairEl = document.createElement('span');
+                pairEl.className = 'move-pair';
+                pairEl.dataset.moveNum = moveCount;
+                pairEl.innerHTML =
+                    `<span class="move-num">${moveCount}.</span>` +
+                    ` ${notation}<span class="move-ann" style="color:${quality.color}">${quality.annotation}</span>`;
+                moveListEl.appendChild(pairEl);
+            } else {
+                const lastPair = moveListEl.lastElementChild;
+                if (lastPair) {
+                    lastPair.innerHTML +=
+                        ` ${notation}<span class="move-ann" style="color:${quality.color}">${quality.annotation}</span>`;
+                }
+            }
+            moveListEl.scrollTop = moveListEl.scrollHeight;
+        }
+
+        function updateMaterialScore(captured) {
+            const whitePts = captured.white.reduce((s, p) => s + (MATERIAL_VALUES[p[1]] || 0), 0);
+            const blackPts = captured.black.reduce((s, p) => s + (MATERIAL_VALUES[p[1]] || 0), 0);
+            const diff = whitePts - blackPts;
+            const el = document.getElementById('material-score');
+            el.className = 'material-score';
+            if (diff > 0) {
+                el.textContent = 'White +' + diff;
+                el.classList.add('white-ahead');
+            } else if (diff < 0) {
+                el.textContent = 'Black +' + (-diff);
+                el.classList.add('black-ahead');
+            } else {
+                el.textContent = '= Even';
+                el.classList.add('even');
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             initGrid();
@@ -928,7 +1156,13 @@
             updateGameState(data);
             await updateBoard();
             updateCapturedPieces();
-            
+
+            // Reset history and eval bar for the new game
+            moveCount = 0;
+            document.getElementById('move-list').innerHTML = '';
+            lastEval = await fetchEval();
+            updateEvalBarDisplay(lastEval);
+
             document.getElementById('ai-status').textContent = 'AI: Level ' + gameState.difficulty;
         }
 
@@ -1110,6 +1344,11 @@
         }
 
         async function makeMove(fromRow, fromCol, toRow, toCol) {
+            // Capture pre-move context before the server changes board state
+            const piece = gameState.board[fromRow][fromCol];
+            const targetPiece = gameState.board[toRow][toCol];
+            const evalBefore = lastEval;
+
             const response = await fetch('/api/make-move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1117,7 +1356,7 @@
             });
 
             const data = await response.json();
-            
+
             if (data.error) {
                 console.error('Move error:', data.error);
                 return;
@@ -1125,16 +1364,27 @@
 
             gameState.selectedSquare = null;
             gameState.validMoves = [];
-            
+
+            // Eval after player's move
+            const evalAfterPlayer = await fetchEval();
+            lastEval = evalAfterPlayer;
+            updateEvalBarDisplay(evalAfterPlayer);
+
+            // Classify and record player's move
+            const playerQuality = await getMoveQuality(evalBefore, evalAfterPlayer, true);
+            const playerNotation = buildNotation(piece, targetPiece, fromRow, fromCol, toRow, toCol);
+            addMoveToHistory(playerNotation, playerQuality, true);
+
             updateGameState(data);
             await updateBoard();
             updateCapturedPieces();
 
             if (gameState.currentTurn === 'black' && !gameState.gameOver) {
                 document.getElementById('thinking').classList.add('active');
-                
                 await new Promise(resolve => setTimeout(resolve, 300));
-                
+
+                const evalBeforeAI = lastEval;
+
                 const aiResponse = await fetch('/api/ai-move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1143,11 +1393,36 @@
                         user_id: currentUser?.email || currentUser?.username
                     })
                 });
-                
+
                 const aiData = await aiResponse.json();
                 document.getElementById('thinking').classList.remove('active');
-                
+
                 if (!aiData.error) {
+                    const aiMove = aiData.aiMove;
+
+                    // Look up AI's piece on board BEFORE updateGameState changes it
+                    let aiPiece = null, aiTarget = null;
+                    if (aiMove) {
+                        aiPiece = gameState.board[aiMove.from.row][aiMove.from.col];
+                        aiTarget = gameState.board[aiMove.to.row][aiMove.to.col];
+                    }
+
+                    // Eval after AI's move
+                    const evalAfterAI = await fetchEval();
+                    lastEval = evalAfterAI;
+                    updateEvalBarDisplay(evalAfterAI);
+
+                    // Classify and record AI's move
+                    if (aiPiece && aiMove) {
+                        const aiQuality = await getMoveQuality(evalBeforeAI, evalAfterAI, false);
+                        const aiNotation = buildNotation(
+                            aiPiece, aiTarget,
+                            aiMove.from.row, aiMove.from.col,
+                            aiMove.to.row, aiMove.to.col
+                        );
+                        addMoveToHistory(aiNotation, aiQuality, false);
+                    }
+
                     updateGameState(aiData);
                     await updateBoard();
                     updateCapturedPieces();
@@ -1157,16 +1432,22 @@
 
         async function undoMove() {
             if (!isLoggedIn) return;
-            
+
             const response = await fetch('/api/undo', { method: 'POST' });
             const data = await response.json();
-            
+
             gameState.selectedSquare = null;
             gameState.validMoves = [];
-            
+
             updateGameState(data);
             await updateBoard();
             updateCapturedPieces();
+
+            // Clear move history (undo makes history inconsistent)
+            moveCount = 0;
+            document.getElementById('move-list').innerHTML = '';
+            lastEval = await fetchEval();
+            updateEvalBarDisplay(lastEval);
         }
 
         async function resign() {
@@ -1180,17 +1461,19 @@
         async function updateCapturedPieces() {
             const response = await fetch('/api/captured-pieces');
             const captured = await response.json();
-            
+
             const whiteCapturedEl = document.getElementById('white-captured');
             const blackCapturedEl = document.getElementById('black-captured');
-            
-            whiteCapturedEl.innerHTML = captured.white.map(p => 
+
+            whiteCapturedEl.innerHTML = captured.white.map(p =>
                 `<img src="${PIECE_IMAGES[p]}" style="width:25px;height:25px;">`
             ).join('');
-            
-            blackCapturedEl.innerHTML = captured.black.map(p => 
+
+            blackCapturedEl.innerHTML = captured.black.map(p =>
                 `<img src="${PIECE_IMAGES[p]}" style="width:25px;height:25px;">`
             ).join('');
+
+            updateMaterialScore(captured);
         }
     </script>
 </body>
