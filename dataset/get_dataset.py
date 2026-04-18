@@ -13,9 +13,7 @@ logger = logging.getLogger(__file__)
 logger.setLevel(logging.INFO)
 logging.basicConfig(level=logging.INFO)
 
-# Replace filename with the path to the downloaded .zst file, which can be
-# downloaded at https://database.lichess.org/#evals
-INPUT_FILEPATH = Path(__file__).parent / "<filename>.zst"
+INPUT_FILEPATH = Path(__file__).parent / "lichess_db_eval.jsonl.zst"
 OUTPUT_FILEPATH = Path(__file__).parent / "lichess_positions.json"
 POSITIONS = 100000
 
@@ -34,6 +32,16 @@ PIECE_TO_INDEX = {
     (chess.KING, chess.BLACK): 11,
 }
 
+# Material values in pawns (used for hand-crafted scalar features)
+MATERIAL_VALUES = {
+    chess.PAWN: 1.0,
+    chess.KNIGHT: 3.0,
+    chess.BISHOP: 3.0,
+    chess.ROOK: 5.0,
+    chess.QUEEN: 9.0,
+    chess.KING: 0.0,
+}
+
 
 class Dataset:
 
@@ -44,16 +52,6 @@ class Dataset:
         max_positions: int = POSITIONS,
         overwrite: bool = False,
     ):
-        """
-        Prepares a chess position dataset from a Lichess .zst evaluation
-        archive. Construction is cheap; call build() to run the full pipeline.
-
-        :param input_filepath: Filepath to .zst archive of chess evaluations.
-        :param output_filepath: Filepath to existing/desired location of
-        decompressed sample of chess evaluations (JSON).
-        :param max_positions: Maximum number of lines to read from archive.
-        :param overwrite: Whether to overwrite existing samples.
-        """
         self.input_filepath = input_filepath
         self.output_filepath = output_filepath
         self.max_positions = max_positions
@@ -68,7 +66,6 @@ class Dataset:
         return len(self.data)
 
     def build(self) -> "Dataset":
-        """Run the full pipeline. Returns self for chaining."""
         self._load()
         self._clean()
         self._preprocess()
@@ -76,7 +73,6 @@ class Dataset:
         return self
 
     def _load(self) -> None:
-        """Decompress archive (if needed) and read JSON into self.data."""
         if self.overwrite or not self.output_filepath.exists():
             self._extract_subset()
             logger.info("Wrote samples to %s", self.output_filepath)
@@ -86,12 +82,10 @@ class Dataset:
         with open(self.output_filepath, "r") as f:
             raw = json.load(f)
 
-        # Deduplicate by FEN
         self.data = list({d["fen"]: d for d in raw}.values())
         logger.info("Loaded %d unique positions", len(self.data))
 
     def _clean(self) -> None:
-        """Remove positions with invalid FENs."""
         valid = []
         for position in self.data:
             try:
@@ -105,7 +99,6 @@ class Dataset:
         self.data = valid
 
     def _preprocess(self) -> None:
-        """Select best eval, normalize scores, flatten to (fen, cp) pairs."""
         for position in self.data:
             self._select_eval(position)
             self._handle_pvs(position)
@@ -113,10 +106,8 @@ class Dataset:
         logger.info("Preprocessed %d positions", len(self.preprocessed_data))
 
     def _vectorize(self) -> None:
-        """Encode FENs to feature vectors and build X, y arrays."""
         self.X = np.array(
-            [self._fen_to_feature_vector(d["fen"]) for d in
-             self.preprocessed_data]
+            [self._fen_to_feature_vector(d["fen"]) for d in self.preprocessed_data]
         )
         self.y = np.array([d["cp"] for d in self.preprocessed_data])
         logger.info("Dataset ready: X=%s y=%s", self.X.shape, self.y.shape)
@@ -160,15 +151,7 @@ class Dataset:
 
     @staticmethod
     def _select_eval(position: dict[str, Any]) -> None:
-        """
-        In positions with multiple evals, selects the most reliable evaluation
-        using depth * log(knodes) as a quality heuristic, and removes the
-        others. Falls back to index 0 if no eval has knodes > 0.
-        :param position:
-        :return:
-        """
         evals = position["evals"]
-
         best_index = 0
         max_score = 0
         for i, ev in enumerate(evals):
@@ -182,21 +165,17 @@ class Dataset:
 
         if max_score == 0:
             logger.warning(
-                "All evals have knodes=0 for position %s, "
-                "defaulting to first eval",
+                "All evals have knodes=0 for position %s, defaulting to first eval",
                 position["fen"]
             )
 
         position["evals"] = [position["evals"][best_index]]
 
     @staticmethod
-    def _handle_pvs(position: dict[str, Any], max_cp: int = 1000) -> None:
+    def _handle_pvs(position: dict[str, Any], max_cp: int = 3000) -> None:
         """
-        Selects the top principal variation (i.e. best variation) and
-        converts "mate in n" to centipawn evaluation, if needed.
-        :param position: Chess board state.
-        :param max_cp: Upper bound for centipawn evaluation.
-        :return:
+        Selects the top principal variation and converts mate scores to
+        centipawn. max_cp raised to 3000 to preserve signal in sharp positions.
         """
         best_pv = position["evals"][0]["pvs"][0]
         mate = best_pv.pop("mate", None)
@@ -218,29 +197,112 @@ class Dataset:
     def _fen_to_feature_vector(fen: str) -> np.ndarray:
         board = chess.Board(fen)
 
-        # Planes 0–11: piece positions
+        # --- Planes 0–11: piece positions (768 features) ---
         planes = np.zeros((18, 8, 8), dtype=np.float32)
         for square, piece in board.piece_map().items():
             rank, file = divmod(square, 8)
             plane = PIECE_TO_INDEX[(piece.piece_type, piece.color)]
             planes[plane, rank, file] = 1.0
 
-        # Plane 12: side to move (1.0 = white, 0.0 = black)
+        # Plane 12: side to move
         planes[12, :, :] = 1.0 if board.turn == chess.WHITE else 0.0
 
         # Planes 13–16: castling rights
-        planes[13, :, :] = float(
-            board.has_kingside_castling_rights(chess.WHITE))
-        planes[14, :, :] = float(
-            board.has_queenside_castling_rights(chess.WHITE))
-        planes[15, :, :] = float(
-            board.has_kingside_castling_rights(chess.BLACK))
-        planes[16, :, :] = float(
-            board.has_queenside_castling_rights(chess.BLACK))
+        planes[13, :, :] = float(board.has_kingside_castling_rights(chess.WHITE))
+        planes[14, :, :] = float(board.has_queenside_castling_rights(chess.WHITE))
+        planes[15, :, :] = float(board.has_kingside_castling_rights(chess.BLACK))
+        planes[16, :, :] = float(board.has_queenside_castling_rights(chess.BLACK))
 
-        # Plane 17: en passant (marks the target file if available)
+        # Plane 17: en passant target file
         if board.ep_square is not None:
             _, ep_file = divmod(board.ep_square, 8)
             planes[17, :, ep_file] = 1.0
 
-        return planes.flatten()
+        bitboard_features = planes.flatten()  # 1152 features
+
+        # --- Attack maps (128 features) ---
+        # Two 8x8 boards: squares attacked by white, squares attacked by black.
+        # These encode piece activity and control far more efficiently than the
+        # model trying to infer it from piece positions alone.
+        white_attacks = np.zeros(64, dtype=np.float32)
+        black_attacks = np.zeros(64, dtype=np.float32)
+        for square in chess.SQUARES:
+            if board.is_attacked_by(chess.WHITE, square):
+                white_attacks[square] = 1.0
+            if board.is_attacked_by(chess.BLACK, square):
+                black_attacks[square] = 1.0
+        attack_features = np.concatenate([white_attacks, black_attacks])
+
+        # --- Scalar hand-crafted features (8 features) ---
+        # These give the model a strong prior without it needing to derive
+        # basic positional concepts from raw squares.
+        scalars = np.zeros(8, dtype=np.float32)
+
+        # 0: Material balance (white - black) in pawn units, normalised by 39
+        #    (max material on one side: Q+2R+2B+2N+8P = 9+10+6+6+8 = 39)
+        white_material = sum(
+            MATERIAL_VALUES[p.piece_type]
+            for p in board.piece_map().values()
+            if p.color == chess.WHITE and p.piece_type != chess.KING
+        )
+        black_material = sum(
+            MATERIAL_VALUES[p.piece_type]
+            for p in board.piece_map().values()
+            if p.color == chess.BLACK and p.piece_type != chess.KING
+        )
+        scalars[0] = (white_material - black_material) / 39.0
+
+        # 1: Mobility ratio — white legal moves / (white + black legal moves).
+        # Proxy for piece activity. Switch turns to count both sides.
+        white_mobility = board.legal_moves.count()
+        board.push(chess.Move.null())
+        black_mobility = board.legal_moves.count()
+        board.pop()
+        total_mobility = white_mobility + black_mobility
+        scalars[1] = white_mobility / total_mobility if total_mobility > 0 else 0.5
+
+        # 2–3: King safety — number of squares adjacent to each king that are
+        # attacked by the opponent. Higher = less safe.
+        white_king_sq = board.king(chess.WHITE)
+        black_king_sq = board.king(chess.BLACK)
+        if white_king_sq is not None:
+            adj = chess.SquareSet(chess.BB_KING_ATTACKS[white_king_sq])
+            scalars[2] = sum(1 for sq in adj if board.is_attacked_by(chess.BLACK, sq)) / 8.0
+        if black_king_sq is not None:
+            adj = chess.SquareSet(chess.BB_KING_ATTACKS[black_king_sq])
+            scalars[3] = sum(1 for sq in adj if board.is_attacked_by(chess.WHITE, sq)) / 8.0
+
+        # 4–5: Pawn structure — doubled pawns per side (normalised by 8)
+        white_pawns = board.pieces(chess.PAWN, chess.WHITE)
+        black_pawns = board.pieces(chess.PAWN, chess.BLACK)
+        white_pawn_files = [chess.square_file(sq) for sq in white_pawns]
+        black_pawn_files = [chess.square_file(sq) for sq in black_pawns]
+        scalars[4] = sum(white_pawn_files.count(f) - 1 for f in set(white_pawn_files) if white_pawn_files.count(f) > 1) / 8.0
+        scalars[5] = sum(black_pawn_files.count(f) - 1 for f in set(black_pawn_files) if black_pawn_files.count(f) > 1) / 8.0
+
+        # 6–7: Passed pawns per side (normalised by 8).
+        # A pawn is passed if no opposing pawn can ever contest its advance.
+        def count_passed_pawns(our_pawns, their_pawns, our_color):
+            count = 0
+            for sq in our_pawns:
+                f = chess.square_file(sq)
+                r = chess.square_rank(sq)
+                adjacent_files = [f] + ([f - 1] if f > 0 else []) + ([f + 1] if f < 7 else [])
+                if our_color == chess.WHITE:
+                    blockers = [
+                        s for s in their_pawns
+                        if chess.square_file(s) in adjacent_files and chess.square_rank(s) > r
+                    ]
+                else:
+                    blockers = [
+                        s for s in their_pawns
+                        if chess.square_file(s) in adjacent_files and chess.square_rank(s) < r
+                    ]
+                if not blockers:
+                    count += 1
+            return count
+
+        scalars[6] = count_passed_pawns(white_pawns, black_pawns, chess.WHITE) / 8.0
+        scalars[7] = count_passed_pawns(black_pawns, white_pawns, chess.BLACK) / 8.0
+
+        return np.concatenate([bitboard_features, attack_features, scalars])
